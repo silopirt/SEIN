@@ -1,37 +1,60 @@
+const dotenv = require('dotenv');
 const express = require('express');
+const logger = require('morgan');
+const path = require('path');
+const router = require('./routes/index');
+const { auth } = require('express-openid-connect');
+
+dotenv.load();
+
 const app = express();
-const Keycloak = require("keycloak-connect");
 
-const session = require('express-session');
-    const memoryStore = new session.MemoryStore();
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'ejs');
 
-    // Configure session
-    app.use(
-      session({
-        secret: 'test',
-        resave: false,
-        saveUninitialized: true,
-        store: memoryStore,
-      })
-    );
-    const kcConfig = {
-        clientId: 'test',
-        serverUrl: 'http://localhost:8080',
-        realm: 'master'
-    };
+app.use(logger('dev'));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
-    const keycloak = new Keycloak({ store: memoryStore}, kcConfig);
+const port = process.env.PORT || 3000;
 
-app.use( keycloak.middleware() );
+const authConfig={
+  authRequired: false,
+  clientSecret: process.env.SECRET,
+  authorizationParams: {
+    response_type: 'code',
+    client_id: process.env.CLIENT_ID,
+    scope: 'openid profile email',
+    audience: 'http://localhost:8080/realms/master/protocol/openid-connect/auth',
+  },
+  baseURL: process.env.BASE_URL || `http://localhost:${port}`,
+};
+app.use(auth(authConfig));
 
-app.listen(3000, function () {
-    console.log('App listening on port 3000');
-    app.get('/apis/me', keycloak.enforcer('user:profile', {response_mode: 'token'}), function (req, res) {
-        const token = req.kauth.grant.access_token.content;
-        const permissions = token.authorization ? token.authorization.permissions : undefined;
-        console.log(token)
-        console.log(permissions)
-        // show user profile
-    });
+// Middleware to make the `user` object available for all views
+app.use(function (req, res, next) {
+  res.locals.user = req.oidc.user;
+  next();
 });
-    
+
+app.use('/', router);
+
+// Catch 404 and forward to error handler
+app.use(function (req, res, next) {
+  const err = new Error('Not Found');
+  err.status = 404;
+  next(err);
+});
+
+// Error handlers
+app.use(function (err, req, res, next) {
+  res.status(err.status || 500);
+  res.render('error', {
+    message: err.message,
+    error: process.env.NODE_ENV !== 'production' ? err : {}
+  });
+});
+
+  app.listen(port, () => {
+    console.log(`Listening on ${authConfig.baseURL}`);
+  });
