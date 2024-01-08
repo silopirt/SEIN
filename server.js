@@ -20,7 +20,8 @@ const port = process.env.PORT || 3000;
 
 const authConfig={
   authRequired: false,
-  clientSecret: process.env.SECRET,
+  clientSecret: process.env.CLIENTSECRET,
+  secret: process.env.SECRET,
   authorizationParams: {
     response_type: 'code',
     client_id: process.env.CLIENT_ID,
